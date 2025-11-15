@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AuraOS Desktop Simulation v2.0</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+    <style>
+        /* Общие стили для симуляции macOS */
+        :root {
+            /* Переменные для Темной Темы */
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --text-primary: #e6edf3;
+            --text-secondary: #909ba8;
+            --window-bg: rgba(22, 27, 34, 0.9);
+            --frosted-bg: rgba(255, 255, 255, 0.1);
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Светлая Тема (Добавляется к <body> при data-theme="light") */
+        body[data-theme="light"] {
+            --bg-primary: #f0f2f5;
+            --bg-secondary: #ffffff;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --window-bg: rgba(255, 255, 255, 0.9);
+            --frosted-bg: rgba(0, 0, 0, 0.05);
+            --border-color: rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-primary);
+            overflow: hidden;
+            transition: background-color 0.3s;
+        }
+
+        /* Эффект Матового Стекла (Frosted Glass) */
+        .frosted-glass {
+            background-color: var(--frosted-bg);
+            backdrop-filter: blur(25px) saturate(180%);
+            -webkit-backdrop-filter: blur(25px) saturate(180%);
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        
+        /* Основной стиль окна */
+        .window {
+            background-color: var(--window-bg);
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+
+        /* Улучшенная тень для окон и дока */
+        .shadow-macos {
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+        }
+
+        /* Анимация пульсации логотипа */
+        @keyframes pulse-logo {
+            0% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.05); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.8; }
+        }
+        .pulse-animation {
+            animation: pulse-logo 2s infinite ease-in-out;
+        }
+
+        /* Анимация увеличения иконки в Доке */
+        .dock-icon {
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+        .dock-icon:hover {
+            transform: scale(1.3) translateY(-8px);
+            z-index: 1000;
+            filter: brightness(1.2);
+        }
+
+        /* Стили кнопок управления окном */
+        .window-control {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            opacity: 0.8;
+            transition: opacity 0.15s;
+        }
+        .window-control:hover {
+            opacity: 1;
+        }
+        .window-control-close { background-color: #ff5f56; } /* Красный */
+        .window-control-minimize { background-color: #ffbd2e; } /* Желтый */
+        .window-control-maximize { background-color: #27c93f; } /* Зеленый */
+
+        /* Стили для изменения размера (хэндлер) */
+        .resize-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            bottom: 0;
+            right: 0;
+            cursor: nwse-resize;
+            z-index: 10;
+        }
+
+        /* Стили для Терминала */
+        .terminal-content {
+            font-family: monospace;
+            background-color: black;
+            color: #27c93f;
+            padding: 10px;
+            height: 100%;
+            overflow-y: auto;
+        }
+
+        /* Стили для анимации исчезновения загрузочного экрана */
+        .fade-out {
+            opacity: 0;
+            transition: opacity 0.5s ease-out;
+        }
+
+        /* Стиль для Desktop: Управление обоями */
+        #desktop {
+            background-size: cover;
+            background-position: center;
+            transition: background-image 0.5s ease;
+        }
+    </style>
+</head>
+<body class="w-screen h-screen relative select-none">
+
+    <!-- 3. Стартовый Экран (Loading Screen) -->
+    <div id="loading-screen" class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black transition-opacity duration-500">
+        <!-- Логотип AuraOS (стилизованная 'A' как SVG) -->
+        <svg id="aura-logo" class="w-24 h-24 text-white pulse-animation" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L2 22H6L10.5 13H13.5L18 22H22L12 2ZM12 4.4L15.3 11H8.7L12 4.4Z" />
+        </svg>
+        <p class="text-white text-sm mt-4 tracking-wider">AuraOS</p>
+
+        <!-- Индикатор Прогресса -->
+        <div class="w-48 h-1 bg-gray-700 rounded-full mt-12 overflow-hidden">
+            <div id="progress-bar" class="h-full bg-white transition-all duration-700 ease-linear" style="width: 0%;"></div>
+        </div>
+    </div>
+
+    <!-- Рабочий Стол (Desktop) -->
+    <div id="desktop" class="w-full h-full relative">
+        <!-- Здесь будут располагаться окна -->
+
+        <!-- 4. Док (Dock) -->
+        <div id="dock" class="fixed bottom-3 left-1/2 -translate-x-1/2 p-2 flex space-x-4 rounded-3xl shadow-macos z-50 frosted-glass">
+            <!-- Иконка 1: Finder -->
+            <div id="app-finder" data-app="Finder" title="Finder" class="dock-icon p-2 rounded-xl text-white bg-blue-500 cursor-pointer w-12 h-12 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+            </div>
+            <!-- Иконка 2: Browser -->
+            <div id="app-browser" data-app="Browser" title="Browser" class="dock-icon p-2 rounded-xl text-white bg-red-500 cursor-pointer w-12 h-12 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.418 0-8-3.582-8-8s3.582-8 8-8 8 3.582 8 8-3.582 8-8 8zm-.5-5h1c.276 0 .5-.224.5-.5s-.224-.5-.5-.5h-1c-.276 0-.5.224-.5.5s.224.5.5.5zM12 6c-2.761 0-5 2.239-5 5s2.239 5 5 5 5-2.239 5-5-2.239-5-5-5zm0 8c-1.657 0-3-1.343-3-3s1.343-3 3-3 3 1.343 3 3-1.343 3-3 3z"/></svg>
+            </div>
+            <!-- Иконка 3: Terminal -->
+            <div id="app-terminal" data-app="Terminal" title="Terminal" class="dock-icon p-2 rounded-xl text-white bg-gray-900 cursor-pointer w-12 h-12 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-6-6-6M12 19h8"/></svg>
+            </div>
+            <!-- Иконка 4: Aura AI (Новое приложение) -->
+            <div id="app-aura-ai" data-app="AuraAI" title="Aura AI Assistant" class="dock-icon p-2 rounded-xl text-white bg-purple-600 cursor-pointer w-12 h-12 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 15h2v2h-2zm0-8h2v6h-2z"/></svg>
+            </div>
+            <!-- Иконка 5: Settings -->
+            <div id="app-settings" data-app="Settings" title="Настройки" class="dock-icon p-2 rounded-xl text-white bg-gray-500 cursor-pointer w-12 h-12 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M19.43 12.98c.04-.32.07-.64.07-.98s-.03-.66-.07-.98l2.11-1.65c.19-.15.24-.42.12-.64l-2-3.46c-.12-.22-.39-.3-.61-.22l-2.49 1c-.52-.4-.98-.75-1.46-1.07l-.37-2.61c-.02-.24-.22-.42-.46-.42h-4c-.24 0-.44.18-.46.42l-.37 2.61c-.48.32-.94.67-1.46 1.07l-2.49-1c-.22-.09-.49 0-.61.22l-2 3.46c-.12.22-.07.49.12.64l2.11 1.65c-.04.32-.07.64-.07.98s.03.66.07.98l-2.11 1.65c-.19.15-.24.42-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.4.98.75 1.46 1.07l.37 2.61c.02.24.22.42.46.42h4c.24 0 .44-.18.46-.42l.37-2.61c.48-.32.94-.67 1.46-1.07l2.49 1c.22.09.49 0 .61-.22l2-3.46c.12-.22.07-.49-.12-.64l-2.11-1.65zM12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/></svg>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное Окно Сообщения (для замены alert/confirm) -->
+    <div id="message-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black bg-opacity-50">
+        <div class="bg-gray-800/90 p-6 rounded-xl shadow-macos w-80 text-white" style="background-color: var(--window-bg);">
+            <h3 id="modal-title" class="text-lg font-bold mb-3" style="color: var(--text-primary);">Сообщение AuraOS</h3>
+            <p id="modal-text" class="mb-6 text-sm" style="color: var(--text-secondary);"></p>
+            <button id="modal-ok-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg w-full transition duration-150">ОК</button>
+        </div>
+    </div>
+
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // === ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ FIREBASE И API ===
+        setLogLevel('debug');
+
+        const apiKey = "AIzaSyAC3F8vMt2Yu-LmI_zm9XFDLHLvjUAU0_w"; // Ваш ключ для Gemini API
+        const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+
+        let db, auth;
+        let isAuthReady = false;
+
+        // Инициализация Firebase (обязательно для платформы)
+        if (firebaseConfig) {
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                onAuthStateChanged(auth, (user) => {
+                    isAuthReady = true;
+                    if (user) {
+                        console.log("User authenticated:", user.uid);
+                    } else {
+                        console.log("No user signed in.");
+                    }
+                });
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    signInWithCustomToken(auth, __initial_auth_token)
+                        .then(() => console.log("Signed in with custom token."))
+                        .catch(error => {
+                            console.error("Custom token sign-in failed. Falling back to anonymous:", error);
+                            signInAnonymously(auth);
+                        });
+                } else {
+                    signInAnonymously(auth)
+                        .then(() => console.log("Signed in anonymously."))
+                        .catch(error => console.error("Anonymous sign-in failed:", error));
+                }
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+            }
+        } else {
+            console.warn("Firebase config not found. Running in standalone desktop simulation mode.");
+            isAuthReady = true;
+        }
+        // =======================================================
+
+
+        // === НАСТРОЙКИ СИСТЕМЫ И ПРАКТИЧНОСТЬ ===
+        
+        const WALLPAPERS = {
+            'dark-nebula': 'https://placehold.co/1920x1080/0d1117/FFFFFF/svg?text=Dark+Nebula',
+            'light-abstract': 'https://placehold.co/1920x1080/FFFFFF/333333/svg?text=Light+Wave',
+            'gradient-blue': 'https://placehold.co/1920x1080/007AFF/FFFFFF/svg?text=Blue+Gradient',
+        };
+
+        const DEFAULT_SETTINGS = {
+            theme: 'dark',
+            wallpaper: 'dark-nebula'
+        };
+
+        function getSettings() {
+            try {
+                const saved = localStorage.getItem('auraos_settings');
+                return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
+            } catch (e) {
+                console.error("Error loading settings, using default.", e);
+                return DEFAULT_SETTINGS;
+            }
+        }
+
+        function saveSettings(newSettings) {
+            try {
+                localStorage.setItem('auraos_settings', JSON.stringify(newSettings));
+                applySettings(); // Применяем сразу после сохранения
+            } catch (e) {
+                console.error("Error saving settings.", e);
+            }
+        }
+
+        function applySettings() {
+            const settings = getSettings();
+            const body = document.body;
+            const desktop = document.getElementById('desktop');
+
+            // 1. Тема
+            body.setAttribute('data-theme', settings.theme);
+
+            // 2. Обои
+            const wallpaperUrl = WALLPAPERS[settings.wallpaper] || WALLPAPERS['dark-nebula'];
+            desktop.style.backgroundImage = `url('${wallpaperUrl}')`;
+        }
+        
+        // --- Обработчики Настроек ---
+
+        window.handleThemeChange = function(theme) {
+            const currentSettings = getSettings();
+            saveSettings({ ...currentSettings, theme: theme });
+        }
+
+        window.handleWallpaperChange = function(wallpaperKey) {
+            if (WALLPAPERS[wallpaperKey]) {
+                const currentSettings = getSettings();
+                saveSettings({ ...currentSettings, wallpaper: wallpaperKey });
+            } else {
+                showMessage('Ошибка Настроек', `Обои "${wallpaperKey}" не найдены.`);
+            }
+        }
+
+
+        // === ОСНОВНАЯ ЛОГИКА AuraOS ===
+
+        const desktop = document.getElementById('desktop');
+        const messageModal = document.getElementById('message-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalText = document.getElementById('modal-text');
+        const modalOkBtn = document.getElementById('modal-ok-btn');
+        let zIndexCounter = 10;
+        
+        // История чата для Aura AI
+        window.auraAIChatHistory = [];
+
+        // Функция для вывода сообщения (замена alert())
+        function showMessage(title, text) {
+            modalTitle.textContent = title;
+            modalText.textContent = text;
+            messageModal.classList.remove('hidden');
+            messageModal.classList.add('flex');
+            modalOkBtn.onclick = () => {
+                messageModal.classList.add('hidden');
+                messageModal.classList.remove('flex');
+            };
+        }
+
+        // --- 3. Логика Загрузочного Экрана ---
+        function startLoadingScreen() {
+            const loadingScreen = document.getElementById('loading-screen');
+            const progressBar = document.getElementById('progress-bar');
+            let progress = 0;
+            const duration = 3000;
+            const intervalTime = 50;
+            const steps = duration / intervalTime;
+            const increment = 100 / steps;
+
+            const interval = setInterval(() => {
+                progress += increment;
+                progressBar.style.width = Math.min(progress, 100) + '%';
+
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    loadingScreen.classList.add('fade-out');
+                    setTimeout(() => {
+                        loadingScreen.remove();
+                        createWindow('Finder', 'Приветствие', 300, 200, 400, 250);
+                    }, 500);
+                }
+            }, intervalTime);
+        }
+
+        // --- 5. Функциональность Окон: Перетаскивание и Z-Index ---
+        function makeWindowDraggableAndFocusable(windowEl) {
+            const header = windowEl.querySelector('.window-header');
+            let isDragging = false;
+            let currentX, currentY, initialX, initialY, xOffset = 0, yOffset = 0;
+
+            // Z-Index (Фокус)
+            windowEl.addEventListener('mousedown', () => {
+                zIndexCounter++;
+                windowEl.style.zIndex = zIndexCounter;
+            });
+
+            // Перетаскивание
+            header.addEventListener('mousedown', dragStart);
+
+            function dragStart(e) {
+                if (windowEl.classList.contains('maximized')) return;
+                initialX = e.clientX - xOffset;
+                initialY = e.clientY - yOffset;
+
+                if (e.target.closest('.window-controls')) return;
+
+                isDragging = true;
+                header.style.cursor = 'grabbing';
+                document.addEventListener('mousemove', drag);
+                document.addEventListener('mouseup', dragEnd);
+            }
+
+            function drag(e) {
+                if (isDragging) {
+                    e.preventDefault();
+                    currentX = e.clientX - initialX;
+                    currentY = e.clientY - initialY;
+
+                    xOffset = currentX;
+                    yOffset = currentY;
+
+                    windowEl.style.transform = "translate3d(" + currentX + "px, " + currentY + "px, 0)";
+                }
+            }
+
+            function dragEnd(e) {
+                isDragging = false;
+                header.style.cursor = 'grab';
+                document.removeEventListener('mousemove', drag);
+                document.removeEventListener('mouseup', dragEnd);
+            }
+        }
+
+        // --- 5. Функциональность Окон: Изменение Размера ---
+        function makeWindowResizable(windowEl) {
+            const handle = windowEl.querySelector('.resize-handle');
+            let isResizing = false;
+            let startX, startY, initialWidth, initialHeight;
+
+            handle.addEventListener('mousedown', resizeStart);
+
+            function resizeStart(e) {
+                if (windowEl.classList.contains('maximized')) return;
+                isResizing = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                initialWidth = windowEl.offsetWidth;
+                initialHeight = windowEl.offsetHeight;
+
+                windowEl.style.transition = 'none';
+
+                document.addEventListener('mousemove', resize);
+                document.addEventListener('mouseup', resizeEnd);
+            }
+
+            function resize(e) {
+                if (isResizing) {
+                    const deltaX = e.clientX - startX;
+                    const deltaY = e.clientY - startY;
+
+                    let newWidth = initialWidth + deltaX;
+                    let newHeight = initialHeight + deltaY;
+
+                    newWidth = Math.max(300, newWidth);
+                    newHeight = Math.max(200, newHeight);
+
+                    windowEl.style.width = newWidth + 'px';
+                    windowEl.style.height = newHeight + 'px';
+                }
+            }
+
+            function resizeEnd() {
+                isResizing = false;
+                windowEl.style.transition = 'width 0.3s, height 0.3s, transform 0.3s';
+                document.removeEventListener('mousemove', resize);
+                document.removeEventListener('mouseup', resizeEnd);
+            }
+        }
+
+        // --- 4 & 5. Создание и Управление Окном ---
+
+        function getWindowContent(appId, appTitle) {
+            const currentSettings = getSettings();
+            const textPrimary = 'var(--text-primary)';
+            const textSecondary = 'var(--text-secondary)';
+            const windowBg = 'var(--window-bg)';
+            
+            switch (appId) {
+                case 'Finder':
+                case 'Приветствие':
+                    return `
+                        <div class="p-4 flex flex-col h-full" style="color: ${textPrimary};">
+                            <h2 class="text-xl font-bold mb-3">Добро пожаловать в AuraOS v2.0!</h2>
+                            <p class="mb-4" style="color: ${textSecondary};">
+                                Мы значительно обновили систему! Теперь вы можете менять тему и обои в приложении 
+                                <span class="font-semibold text-blue-500 cursor-pointer" onclick="createWindow('Settings', 'Настройки', 500, 650)">Настройки</span>.
+                            </p>
+                            <p class="text-sm text-blue-400">Попробуйте:</p>
+                            <ul class="list-disc list-inside ml-2 text-sm" style="color: ${textSecondary};">
+                                <li>Открыть "Aura AI" и спросить о последних новостях (интеграция Gemini + Google Search).</li>
+                                <li>Изменить тему на светлую через Настройки.</li>
+                                <li>Поменять обои на синий градиент.</li>
+                            </ul>
+                        </div>
+                    `;
+                case 'Browser':
+                    return `
+                        <div class="p-4" style="color: ${textPrimary};">
+                            <div class="flex space-x-2 mb-4 p-1 rounded-lg" style="background-color: var(--bg-secondary); border: 1px solid var(--border-color);">
+                                <span class="text-blue-400">←</span>
+                                <span class="text-gray-400">→</span>
+                                <input type="text" value="https://auraos.dev" readonly class="flex-grow rounded px-2 py-1 text-sm focus:outline-none border-none" style="background-color: transparent; color: ${textPrimary};">
+                            </div>
+                            <div class="h-full text-center py-10">
+                                <p class="text-2xl text-red-500">🌐 Web-Браузер (AuraBrowser)</p>
+                                <p class="text-sm mt-2" style="color: ${textSecondary};">Контент не загружен. Это всего лишь симуляция!</p>
+                            </div>
+                        </div>
+                    `;
+                case 'Terminal':
+                    return `
+                        <div class="terminal-content">
+                            AuraOS Terminal [Версия 1.1.0]<br>
+                            (c) 2025 Aura Development. Все права защищены.<br><br>
+                            <span id="terminal-output"></span>
+                            <span id="terminal-prompt" class="flex"><span class="text-pink-400">user@AuraOS</span>:<span class="text-blue-400">~</span>$ <input type="text" id="terminal-input" class="bg-transparent border-none text-green-400 flex-grow focus:outline-none caret-white" autofocus onkeydown="if(event.key==='Enter') window.handleTerminalInput(this)"></span>
+                        </div>
+                    `;
+                case 'AuraAI':
+                    return `
+                        <div class="flex flex-col h-full" style="background-color: var(--bg-secondary);">
+                            <div id="aura-ai-chat-output" class="flex-grow overflow-y-auto p-4 space-y-4">
+                                <div class="flex justify-start">
+                                    <div class="bg-purple-600/80 rounded-xl rounded-tl-sm p-3 text-white max-w-xs shadow-md">
+                                        Здравствуйте! Я Aura AI, ваш помощник. Спросите меня о чем угодно!
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="p-3 border-t" style="border-color: var(--border-color); background-color: var(--window-bg);">
+                                <div class="flex space-x-2">
+                                    <input type="text" id="aura-ai-input" placeholder="Спросите что-нибудь у Aura AI..." class="flex-grow rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-purple-500 border border-transparent transition" style="background-color: var(--bg-primary); color: ${textPrimary};">
+                                    <button id="aura-ai-send-btn" class="bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-lg flex items-center justify-center transition" onclick="window.handleAuraAIChat(document.getElementById('aura-ai-input'))">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                case 'Settings':
+                    const themeOptions = [
+                        { key: 'dark', label: 'Темная (по умолчанию)' },
+                        { key: 'light', label: 'Светлая (классика)' }
+                    ];
+
+                    const wallpaperOptions = Object.keys(WALLPAPERS).map(key => ({
+                        key: key,
+                        label: key.split('-').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ')
+                    }));
+
+                    return `
+                        <div class="p-4 space-y-6 overflow-y-auto h-full" style="color: ${textPrimary};">
+                            <h2 class="text-2xl font-bold mb-4 border-b pb-2" style="border-color: var(--border-color);">Настройки Системы</h2>
+
+                            <!-- Секция Внешний Вид -->
+                            <div>
+                                <h3 class="text-lg font-semibold mb-3">Внешний Вид (Appearance)</h3>
+                                
+                                <div class="p-4 rounded-xl border" style="border-color: var(--border-color); background-color: var(--bg-secondary);">
+                                    <p class="font-medium mb-2 text-sm" style="color: ${textSecondary};">Тема:</p>
+                                    <div class="flex space-x-4">
+                                        ${themeOptions.map(option => `
+                                            <button 
+                                                class="px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 ${currentSettings.theme === option.key ? 'bg-blue-600 text-white' : 'bg-gray-500/20 hover:bg-gray-500/30'}"
+                                                onclick="window.handleThemeChange('${option.key}')"
+                                            >
+                                                ${option.label}
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Секция Обои -->
+                            <div>
+                                <h3 class="text-lg font-semibold mb-3">Обои (Desktop Background)</h3>
+                                
+                                <div class="grid grid-cols-2 gap-4 p-4 rounded-xl border" style="border-color: var(--border-color); background-color: var(--bg-secondary);">
+                                    ${wallpaperOptions.map(option => `
+                                        <div 
+                                            class="p-2 border-2 rounded-lg cursor-pointer transition-all duration-200"
+                                            style="
+                                                border-color: ${currentSettings.wallpaper === option.key ? '#3b82f6' : 'var(--border-color)'};
+                                                background-image: url('${WALLPAPERS[option.key]}');
+                                                background-size: cover; 
+                                                height: 100px;
+                                            "
+                                            onclick="window.handleWallpaperChange('${option.key}')"
+                                        >
+                                            <div class="text-xs font-medium backdrop-blur-sm bg-black/30 p-1 rounded" style="color: white;">${option.label}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+
+                            <!-- Секция Информация -->
+                            <div class="pt-4 border-t" style="border-color: var(--border-color);">
+                                <h3 class="text-lg font-semibold mb-3">Система</h3>
+                                <p class="text-sm" style="color: ${textSecondary};">Версия: AuraOS v2.0</p>
+                                <p class="text-sm" style="color: ${textSecondary};">Powered by: Gemini AI</p>
+                                <p class="text-sm mt-1 text-blue-500 cursor-pointer" onclick="showMessage('Информация', 'AuraOS v2.0: симуляция рабочего стола. Используйте настройки для персонализации.')">Проверить обновления...</p>
+                            </div>
+                        </div>
+                    `;
+                default:
+                    return `<div class="p-4" style="color: ${textPrimary};">Неизвестное приложение: ${appTitle}</div>`;
+            }
+        }
+
+        function createWindow(appId, title, width, height, x, y) {
+            const windowEl = document.createElement('div');
+            const content = getWindowContent(appId, title);
+            const initialX = x || Math.floor(Math.random() * (desktop.offsetWidth - width - 100)) + 50;
+            const initialY = y || Math.floor(Math.random() * (desktop.offsetHeight - height - 100)) + 50;
+
+            zIndexCounter++;
+
+            // Обратите внимание, что классы цвета (bg-gray-800/80) удалены,
+            // чтобы стили определялись через CSS-переменные
+            windowEl.className = `window absolute rounded-xl shadow-macos flex flex-col overflow-hidden transition-all duration-300 ease-out`;
+            windowEl.style.width = `${width}px`;
+            windowEl.style.height = `${height}px`;
+            windowEl.style.transform = `translate3d(${initialX}px, ${initialY}px, 0)`;
+            windowEl.style.zIndex = zIndexCounter;
+            windowEl.dataset.appId = appId;
+
+            windowEl.innerHTML = `
+                <!-- Заголовок Окна (Frosted Glass) -->
+                <div class="window-header flex items-center p-3 h-8 frosted-glass cursor-grab flex-shrink-0">
+                    <!-- Кнопки Управления -->
+                    <div class="window-controls flex items-center">
+                        <div class="window-control window-control-close" title="Закрыть"></div>
+                        <div class="window-control window-control-minimize" title="Свернуть"></div>
+                        <div class="window-control window-control-maximize" title="Развернуть/Восстановить"></div>
+                    </div>
+                    <!-- Заголовок -->
+                    <span class="text-xs font-semibold ml-4 truncate flex-grow text-center" style="color: var(--text-primary);">
+                        ${title}
+                    </span>
+                </div>
+
+                <!-- Контент Окна -->
+                <div class="window-content flex-grow relative p-0 overflow-hidden">
+                    ${content}
+                </div>
+
+                <!-- Хэндлер Изменения Размера (Bottom-Right) -->
+                <div class="resize-handle"></div>
+            `;
+
+            desktop.appendChild(windowEl);
+
+            makeWindowDraggableAndFocusable(windowEl);
+            makeWindowResizable(windowEl);
+
+            // Логика кнопок управления
+            const closeBtn = windowEl.querySelector('.window-control-close');
+            const maximizeBtn = windowEl.querySelector('.window-control-maximize');
+
+            // Красная кнопка: Закрыть
+            closeBtn.onclick = () => {
+                windowEl.remove();
+            };
+
+            // Зеленая кнопка: Развернуть/Восстановить
+            maximizeBtn.onclick = () => {
+                const isMaximized = windowEl.classList.contains('maximized');
+                
+                if (isMaximized) {
+                    // Восстановить (Restore)
+                    windowEl.classList.remove('maximized');
+                    windowEl.style.width = windowEl.dataset.prevWidth || `${width}px`;
+                    windowEl.style.height = windowEl.dataset.prevHeight || `${height}px`;
+                    windowEl.style.transform = windowEl.dataset.prevTransform || `translate3d(${initialX}px, ${initialY}px, 0)`;
+                } else {
+                    // Развернуть (Maximize)
+                    windowEl.dataset.prevWidth = windowEl.style.width;
+                    windowEl.dataset.prevHeight = windowEl.style.height;
+                    windowEl.dataset.prevTransform = windowEl.style.transform;
+
+                    windowEl.classList.add('maximized');
+                    windowEl.style.width = '100%';
+                    windowEl.style.height = 'calc(100% - 68px)';
+                    windowEl.style.transform = 'translate3d(0, 0, 0)';
+                }
+            };
+
+            if (appId === 'Terminal') {
+                initializeTerminal(windowEl);
+            }
+        }
+
+        // --- 6. Контент: Логика Терминала ---
+        function initializeTerminal(windowEl) {
+            const terminalOutput = windowEl.querySelector('#terminal-output');
+            const terminalInput = windowEl.querySelector('#terminal-input');
+
+            const commands = {
+                'help': 'Доступные команды: help, echo [текст], clear, about, time',
+                'about': 'AuraOS v2.0. Симуляция рабочего стола с Gemini AI и настройками темы.',
+                'time': new Date().toLocaleString('ru-RU'),
+                'clear': 'clear',
+                'echo': (args) => args.join(' ')
+            };
+
+            window.handleTerminalInput = function(inputEl) {
+                const commandLine = inputEl.value.trim();
+                const content = windowEl.querySelector('.terminal-content');
+
+                // Форматируем вывод команды
+                terminalOutput.innerHTML += `<span class="text-pink-400">user@AuraOS</span>:<span class="text-blue-400">~</span>$ <span class="text-green-400">${commandLine}</span><br>`;
+
+                const [cmd, ...args] = commandLine.toLowerCase().split(' ');
+                let result = '';
+
+                if (cmd === 'clear') {
+                    terminalOutput.innerHTML = '';
+                } else if (commands[cmd]) {
+                    if (typeof commands[cmd] === 'function') {
+                        result = commands[cmd](args);
+                    } else {
+                        result = commands[cmd];
+                    }
+                    if (result !== 'clear') {
+                         terminalOutput.innerHTML += result + '<br>';
+                    }
+                } else {
+                    result = `Ошибка: Команда "${cmd}" не найдена. Введите 'help'.`;
+                    terminalOutput.innerHTML += result + '<br>';
+                }
+
+                inputEl.value = '';
+                // Прокрутка вниз
+                content.scrollTop = content.scrollHeight;
+            }
+            window.handleTerminalInput = window.handleTerminalInput.bind(null); // Привязываем, чтобы избежать конфликтов
+        }
+        
+        // --- 7. Контент: Логика Aura AI (Gemini API) ---
+
+        /**
+         * Отображает сообщение в окне чата.
+         */
+        function displayMessage(role, text) {
+            const chatOutput = document.getElementById('aura-ai-chat-output');
+            if (!chatOutput) return;
+
+            const isUser = role === 'user';
+            const bgColor = isUser ? 'bg-blue-600/80' : 'bg-purple-600/80';
+            const alignment = isUser ? 'justify-end' : 'justify-start';
+            const roundedClass = isUser ? 'rounded-br-sm' : 'rounded-tl-sm';
+
+            const messageHtml = `
+                <div class="flex ${alignment}">
+                    <div class="${bgColor} rounded-xl ${roundedClass} p-3 text-white max-w-xs shadow-md whitespace-pre-wrap">
+                        ${text}
+                    </div>
+                </div>
+            `;
+            chatOutput.innerHTML += messageHtml;
+            chatOutput.scrollTop = chatOutput.scrollHeight;
+        }
+
+        /**
+         * Выполняет вызов Gemini API с экспоненциальной задержкой.
+         */
+        async function fetchGeminiResponse(contents, attempt = 0) {
+            const maxRetries = 3;
+
+            try {
+                const payload = {
+                    contents: contents,
+                    tools: [{ "google_search": {} }],
+                    systemInstruction: {
+                        parts: [{ text: "You are Aura AI, a helpful, friendly, and concise desktop assistant running in a simulated operating system. Respond briefly and engagingly in Russian." }]
+                    },
+                };
+
+                const response = await fetch(geminiApiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text || "Извините, я не смог получить ответ.";
+                return text;
+
+            } catch (error) {
+                if (attempt < maxRetries) {
+                    const delay = Math.pow(2, attempt) * 1000;
+                    // console.warn(`Retrying API call in ${delay}ms...`, error.message);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return fetchGeminiResponse(contents, attempt + 1);
+                } else {
+                    throw new Error(`Не удалось подключиться к Aura AI: ${error.message}`);
+                }
+            }
+        }
+        
+        window.handleAuraAIChat = async function(inputEl) {
+            const userQuery = inputEl.value.trim();
+            if (!userQuery) return;
+
+            // Блокируем ввод и кнопку
+            inputEl.value = '';
+            inputEl.disabled = true;
+            const sendBtn = document.getElementById('aura-ai-send-btn');
+            if (sendBtn) sendBtn.disabled = true;
+
+            // 1. Отображаем сообщение пользователя
+            displayMessage('user', userQuery);
+            window.auraAIChatHistory.push({ role: 'user', parts: [{ text: userQuery }] });
+            
+            // 2. Добавляем индикатор загрузки
+            const loadingHtml = `<div id="ai-loading" class="flex justify-start"><div class="bg-purple-600/80 rounded-xl rounded-tl-sm p-3 text-white max-w-xs shadow-md"><div class="animate-pulse">... Печатает ...</div></div></div>`;
+            const chatOutput = document.getElementById('aura-ai-chat-output');
+            chatOutput.innerHTML += loadingHtml;
+            chatOutput.scrollTop = chatOutput.scrollHeight;
+
+            try {
+                // 3. Вызываем API
+                const modelResponse = await fetchGeminiResponse(window.auraAIChatHistory);
+
+                // 4. Удаляем индикатор загрузки
+                const loadingIndicator = document.getElementById('ai-loading');
+                if (loadingIndicator) loadingIndicator.remove();
+
+                // 5. Отображаем ответ модели
+                displayMessage('model', modelResponse);
+                window.auraAIChatHistory.push({ role: 'model', parts: [{ text: modelResponse }] });
+
+            } catch (error) {
+                // 4. Удаляем индикатор загрузки и показываем ошибку
+                const loadingIndicator = document.getElementById('ai-loading');
+                if (loadingIndicator) loadingIndicator.remove();
+                displayMessage('model', `Произошла ошибка: ${error.message}`);
+            } finally {
+                // Разблокируем ввод
+                inputEl.disabled = false;
+                if (sendBtn) sendBtn.disabled = false;
+                inputEl.focus();
+            }
+        }
+
+
+        // --- Инициализация ---
+        window.onload = function () {
+            // ПЕРВЫМ ДЕЛОМ: Применяем сохраненные настройки (тема/обои)
+            applySettings();
+            
+            // 4. Логика Дока: Обработчики кликов
+            document.querySelectorAll('.dock-icon').forEach(icon => {
+                icon.addEventListener('click', (e) => {
+                    const appId = e.currentTarget.dataset.app;
+                    let title;
+                    let width = 600, height = 400;
+
+                    switch(appId) {
+                        case 'Finder': title = 'Рабочий Стол'; width = 800; height = 500; break;
+                        case 'Browser': title = 'AuraBrowser'; break;
+                        case 'Terminal': title = 'Терминал'; width = 700; height = 500; break;
+                        case 'AuraAI': title = 'Aura AI Assistant'; width = 500; height = 700; break;
+                        case 'Settings': title = 'Настройки'; width = 500; height = 650; break;
+                        default: title = 'Новое Окно';
+                    }
+
+                    // Проверяем, существует ли уже окно, и если да, просто фокусируем его
+                    const existingWindow = document.querySelector(`.window[data-app-id="${appId}"]`);
+                    if (existingWindow) {
+                         zIndexCounter++;
+                         existingWindow.style.zIndex = zIndexCounter;
+                         showMessage('AuraOS', `Окно "${title}" уже открыто и было перенесено на передний план.`);
+                         return;
+                    }
+
+                    createWindow(appId, title, width, height);
+                });
+            });
+
+            // Начинаем анимацию загрузочного экрана
+            startLoadingScreen();
+        };
+
+    </script>
+</body>
+</html>
